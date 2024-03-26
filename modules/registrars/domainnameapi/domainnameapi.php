@@ -79,22 +79,43 @@ function domainnameapi_getConfigArray($params) {
                 "Value" => $sysMsg ."<br>Don't have an Domain Name API account yet? Get one here: <a href='https://www.domainnameapi.com/become-a-reseller' target='_blank'>https://www.domainnameapi.com/become-a-reseller</a>"
             ],
             "API_UserName" => [
-                "FriendlyName" => "UserName",
+                "FriendlyName" => "Legacy System UserName",
                 "Type"         => "text",
                 "Size"         => "20",
-                "Default"      => "ownername"
+                "Default"      => "ownername",
+                'Description'  => 'Require for legacy system. It can be ignored after switching to the new system.',
             ],
             "API_Password" => [
-                "FriendlyName" => "Password",
+                "FriendlyName" => "Legacy System Password",
                 "Type"         => "password",
                 "Size"         => "20",
                 "Default"      => "ownerpass"
             ],
-            "API_TestMode" => [
-                "FriendlyName" => "Test Mode",
+            "New_System" => [
+                "FriendlyName" => "New System",
                 "Type"         => "yesno",
                 "Default"      => "yes",
-                "Description"  => "Check for using test platform!"
+                "Description"  => "Have you migrated or using new system ? Then fill informations below."
+            ],
+            "New_UserName" => [
+                "FriendlyName" => "New System UserName",
+                "Type"         => "text",
+                "Size"         => "20",
+                "Default"      => "",
+                'Description'  => 'Require for New system. If you checked New System then all fields below are required.',
+            ],
+            "New_Password" => [
+                "FriendlyName" => "New System Password",
+                "Type"         => "password",
+                "Size"         => "20",
+                "Default"      => ""
+            ],
+            "New_ResellerId" => [
+                "FriendlyName" => "New System ResellerId",
+                "Type"         => "text",
+                "Size"         => "20",
+                "Default"      => "",
+                'Description'  => '',
             ],
             'TrIdendity'   => [
                 'FriendlyName' => 'Turkish Identity',
@@ -147,32 +168,38 @@ function domainnameapi_getConfigArray($params) {
 }
 
 function domainnameapi_GetNameservers($params) {
-    require_once __DIR__.'/lib/dna.php';
 
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
+    $is_v2       = $params["New_System"] === true || $params["New_System"] == 'on';
+    $domain_name = $params['sld'] . '.' . $params['tld'];
+    $values      = [];
 
+    if ($is_v2) {
+        $dna         = domainnameapi_service2($params);
+        $result      = $dna->getDomainDetails($domain_name);
+        $success     = $result["success"];
+        $nameservers = $result["nameservers"] ?? null;
+        $error       = $success ? null : $result["error"]["code"] . " - " . $result["error"]["message"];
+    } else {
+        $dna         = domainnameapi_service($params);
+        $result      = $dna->GetDetails($domain_name);
+        $success     = $result["result"] == "OK";
+        $nameservers = $result["data"]["NameServers"] ?? null;
+        $error       = $success ? null : $result["error"]["Message"] . " - " . $result["error"]["Details"];
+    }
 
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
-
-    $result = $dna->GetDetails($params["sld"].".".$params["tld"]);
-    $values=[];
-
-    if($result["result"] == "OK") {
-        if(is_array($result["data"]["NameServers"])) {
-            foreach ([0,1,2,3,4] as $k => $v) {
-                if (isset($result["data"]["NameServers"][$v])) {
-                    $values["ns".($v+1)] = $result["data"]["NameServers"][$v];
+    if ($success) {
+        if (is_array($nameservers)) {
+            foreach ([0,1,2,3,4] as $v) {
+                if (isset($nameservers[$v])) {
+                    $values["ns".($v+1)] = $nameservers[$v];
                 }
             }
-        }
-        else {
-            // Only one nameserver
-            if(isset($result["data"]["NameServers"])) { $values["ns1"] = $result["data"]["NameServers"]; }
+        } elseif ($nameservers !== null) {
+            // Tek bir nameserver varsa
+            $values["ns1"] = $nameservers;
         }
     } else {
-        $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        $values["error"] = $error;
     }
 
     // Log request
@@ -180,43 +207,47 @@ function domainnameapi_GetNameservers($params) {
         substr(__FUNCTION__, 14),
         $dna->getRequestData(),
         $dna->getResponseData(),
-        $values,
-        [$username,$password]
+        $values
     );
 
     return $values;
 }
 
 function domainnameapi_SaveNameservers($params) {
+    $values      = $nsList = [];
+    $domain_name = $params['sld'] . '.' . $params['tld'];
+    $is_v2       = $params["New_System"] === true || $params["New_System"] == 'on';
 
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
-
-    $values=$nsList=[];
-
-    foreach ([1,2,3,4,5] as $k => $v) {
+    // Nameserver listesini hazırla
+    foreach ([1, 2, 3, 4, 5] as $v) {
         if (isset($params["ns{$v}"]) && is_string($params["ns{$v}"]) && strlen(trim($params["ns{$v}"])) > 0) {
             $nsList[] = $params["ns{$v}"];
         }
     }
 
-    // Process request
-    $result = $dna->ModifyNameserver($params["sld"].".".$params["tld"], $nsList);
+    // API sürümüne göre işlem yap
+    if ($is_v2) {
+        $dna    = domainnameapi_service2($params);
+        $result = $dna->ModifyNameserver($domain_name, $nsList);
 
-    if($result["result"] == "OK") {
-
-        foreach ([0, 1, 2, 3, 4] as $k => $v) {
-            if (isset($result["data"]["NameServers"][0][$v])) {
-                $values["ns" . ($v + 1)] = $result["data"]["NameServers"][0][$v];
-            }
+        if ($result["success"] === true) {
+            $values = ["success" => true, "ns"      => $nsList];
+        } else {
+            $values["error"] = $result["error"]["code"] . " - " . $result["error"]["message"];
         }
     } else {
-        $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        $dna    = domainnameapi_service($params);
+        $result = $dna->ModifyNameserver($domain_name, $nsList);
+
+        if ($result["result"] == "OK") {
+            foreach ([0, 1, 2, 3, 4] as $v) {
+                if (isset($result["data"]["NameServers"][0][$v])) {
+                    $values["ns" . ($v + 1)] = $result["data"]["NameServers"][0][$v];
+                }
+            }
+        } else {
+            $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        }
     }
 
     // Log request
@@ -224,24 +255,16 @@ function domainnameapi_SaveNameservers($params) {
         substr(__FUNCTION__, 14),
         $dna->getRequestData(),
         $dna->getResponseData(),
-        $values,
-        [$username,$password]
+        $values
     );
 
     return $values;
 }
 
 function domainnameapi_GetRegistrarLock($params) {
-
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
     $values=[];
 
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+     $dna = domainnameapi_service($params);
 
     // Process request
     $result = $dna->GetDetails($params["sld"].".".$params["tld"]);
@@ -273,16 +296,9 @@ function domainnameapi_GetRegistrarLock($params) {
 }
 
 function domainnameapi_SaveRegistrarLock($params) {
+  $values=[];
 
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+    $dna = domainnameapi_service($params);
 
     // Get current lock status from registrar, Process request
     $result = $dna->GetDetails($params["sld"].".".$params["tld"]);
@@ -332,16 +348,9 @@ function domainnameapi_SaveRegistrarLock($params) {
 }
 
 function domainnameapi_RegisterDomain($params) {
+ $values=[];
 
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+  $dna = domainnameapi_service($params);
 
 
     $nameServers = [];
@@ -414,16 +423,9 @@ function domainnameapi_RegisterDomain($params) {
 }
 
 function domainnameapi_TransferDomain($params) {
+$values=[];
 
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+ $dna = domainnameapi_service($params);
     // Process request
     $result = $dna->Transfer($params["sld"].".".$params["tld"], $params["transfersecret"],$params['regperiod']);
 
@@ -446,16 +448,9 @@ function domainnameapi_TransferDomain($params) {
 }
 
 function domainnameapi_RenewDomain($params) {
-
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
     $values=[];
 
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+    $dna = domainnameapi_service($params);
 
     // Process request
     $result = $dna->Renew($params["sld"].".".$params["tld"], $params["regperiod"]);
@@ -479,16 +474,8 @@ function domainnameapi_RenewDomain($params) {
 }
 
 function domainnameapi_GetContactDetails($params) {
-
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+$values=[];
+     $dna = domainnameapi_service($params);
 
     // Process request
     $result = $dna->GetContacts($params["sld"].".".$params["tld"]);
@@ -521,16 +508,9 @@ function domainnameapi_GetContactDetails($params) {
 }
 
 function domainnameapi_SaveContactDetails($params) {
+$values=[];
 
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+ $dna = domainnameapi_service($params);
     // Process request
     $result = $dna->SaveContacts(
 
@@ -563,16 +543,9 @@ function domainnameapi_SaveContactDetails($params) {
 }
 
 function domainnameapi_GetEPPCode($params) {
+$values=[];
 
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+ $dna = domainnameapi_service($params);
 
     // Process request
     $result = $dna->GetDetails($params["sld"].".".$params["tld"]);
@@ -606,15 +579,9 @@ function domainnameapi_GetEPPCode($params) {
 }
 
 function domainnameapi_RegisterNameserver($params) {
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
     $values=[];
 
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+     $dna = domainnameapi_service($params);
 
     // Process request
     $result = $dna->AddChildNameServer($params["sld"].".".$params["tld"], $params["nameserver"], $params["ipaddress"]);
@@ -638,15 +605,9 @@ function domainnameapi_RegisterNameserver($params) {
 
 function domainnameapi_ModifyNameserver($params) {
 
-    require_once __DIR__.'/lib/dna.php';
+  $values=[];
 
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+   $dna = domainnameapi_service($params);
 
 
     // Process request
@@ -674,15 +635,9 @@ function domainnameapi_ModifyNameserver($params) {
 }
 
 function domainnameapi_DeleteNameserver($params) {
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
     $values=[];
 
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+     $dna = domainnameapi_service($params);
 
     // Process request
     $result = $dna->DeleteChildNameServer($params["sld"].".".$params["tld"], $params["nameserver"]);
@@ -705,49 +660,10 @@ function domainnameapi_DeleteNameserver($params) {
     return $values;
 }
 
-/*
-function domainnameapi_RequestDelete($params) {
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
-
-    // Process request
-    $result = $dna->Delete($params["sld"].".".$params["tld"]);
-
-    if ($result["result"] == "OK") {
-        $values["success"] = true;
-    } else {
-        $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
-    }
-
-    // Log request
-    logModuleCall("domainnameapi",
-        substr(__FUNCTION__, 14),
-        $dna->getRequestData(),
-        $dna->getResponseData(),
-        $values,
-        [$username,$password]
-    );
-    return $values;
-}
-*/
-
 function domainnameapi_IDProtectToggle($params) {
-    require_once __DIR__.'/lib/dna.php';
+ $values=[];
 
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+ $dna = domainnameapi_service($params);
 
     if($params["protectenable"]) {
         // Process request
@@ -791,15 +707,9 @@ function domainnameapi_SaveDNS($params)
 }
 
 function domainnameapi_CheckAvailability($params) {
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
     $values=[];
 
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+     $dna = domainnameapi_service($params);
 
 
     if($params['isIdnDomain']){
@@ -884,16 +794,9 @@ function domainnameapi_CheckAvailability($params) {
 }
 
 function domainnameapi_GetDomainSuggestions($params) {
-    require_once __DIR__.'/lib/dna.php';
+   $values=[];
 
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-
-    $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+    $dna = domainnameapi_service($params);
 
     if($params['isIdnDomain']){
         $label = empty($params['punyCodeSearchTerm']) ? strtolower($params['searchTerm']) : strtolower($params['punyCodeSearchTerm']);
@@ -969,24 +872,14 @@ function domainnameapi_GetDomainSuggestions($params) {
 
     return $results;
 
-
-
 }
 
 function domainnameapi_GetTldPricing($params) {
     // Perform API call to retrieve extension information
     // A connection error should return a simple array with error key and message
     // return ['error' => 'This error occurred',];
-
-    require_once __DIR__ . '/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $values = [];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username, $password, $testmode);
+$values = [];
+     $dna = domainnameapi_service($params);
 
     $tldlist = $dna->GetTldList(1200);
 
@@ -1046,17 +939,8 @@ function domainnameapi_GetTldPricing($params) {
 
 function domainnameapi_Sync($params) {
 
-
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
-
+$values=[];
+    $dna = domainnameapi_service($params);
 
     // Process request
     $result = $dna->SyncFromRegistry($params["sld"].".".$params["tld"]);
@@ -1149,18 +1033,9 @@ function domainnameapi_Sync($params) {
 }
 
 function domainnameapi_TransferSync($params) {
+ $values=[];
 
-
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-    $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
-
+     $dna = domainnameapi_service($params);
 
     // Process request
     $result = $dna->SyncFromRegistry($params["sld"].".".$params["tld"]);
@@ -1237,15 +1112,8 @@ function domainnameapi_AdminCustomButtonArray() {
 
 function domainnameapi_canceltransfer($params) {
 
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
     $values=[];
-
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+    $dna = domainnameapi_service($params);
 
     $result = $dna->CancelTransfer($params["sld"] . "." . $params["tld"]);
 
@@ -1279,16 +1147,9 @@ function domainnameapi_AdminDomainsTabFields($params){
         $params[$v->setting] = $results['password'];
     }
 
-    require_once __DIR__.'/lib/dna.php';
-
-    $username = $params["API_UserName"];
-    $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
-
-
     $values=[];
 
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+    $dna = domainnameapi_service($params);
 
 
     // Process request
@@ -1346,10 +1207,11 @@ function domainnameapi_parse_contact($params) {
 
 function domainnameapi_parse_clientinfo($params) {
 
+    $is_v2 = $params["New_System"] === true || $params["New_System"] == 'on';
 
     $firstname   = $params["First Name"] ?? $params["firstname"];
     $lastname    = $params["Last Name"] ?? $params["lastname"];
-    $compantname = $params["Company Name"] ?? $params["companyname"];
+    $companyname = $params["Company Name"] ?? $params["companyname"];
     $email       = $params["Email"] ?? $params["email"];
     $address1    = $params["Address 1"] ?? $params["address1"];
     $address2    = $params["Address 2"] ?? $params["address2"];
@@ -1362,29 +1224,49 @@ function domainnameapi_parse_clientinfo($params) {
     $postcode    = $params["ZIP Code"] ?? $params["postcode"];
     $state       = $params["State"] ?? $params["state"];
 
+    if ($is_v2) {
+        // Yeni API için anahtar adlarını kullan
+        $arr_client = [
+            "firstName"        => $firstname,
+            "lastName"         => $lastname,
+            "companyName"      => $companyname,
+            "eMail"            => $email,
+            "address"          => $address1 . " " . $address2, // Adresleri birleştir
+            "state"            => $state,
+            "city"             => $city,
+            "country"          => $country,
+            "fax"              => $fax,
+            "faxCountryCode"   => $faxcc,
+            "phone"            => $phone,
+            "phoneCountryCode" => $phonecc,
+            "postalCode"       => $postcode,
+        ];
+    } else {
+        // Eski API için anahtar adlarını kullan
+        $arr_client = [
+            "FirstName"        => $firstname,
+            "LastName"         => $lastname,
+            "Company"          => $companyname,
+            "EMail"            => $email,
+            "AddressLine1"     => $address1,
+            "AddressLine2"     => $address2,
+            "State"            => $state,
+            "City"             => $city,
+            "Country"          => $country,
+            "Fax"              => $fax,
+            "FaxCountryCode"   => $faxcc,
+            "Phone"            => $phone,
+            "PhoneCountryCode" => $phonecc,
+            "ZipCode"          => $postcode,
+        ];
+        if (isset($params['FirstName'])) {
+            $arr_client['Status'] = ""; // Eğer FirstName parametresi varsa, Status ekleyin
+        }
+    }
 
-
-    $arr_client= [
-        "FirstName"        => mb_convert_encoding($firstname, "UTF-8", "auto"),
-        "LastName"         => mb_convert_encoding($lastname, "UTF-8", "auto"),
-        "Company"          => mb_convert_encoding($compantname, "UTF-8", "auto"),
-        "EMail"            => mb_convert_encoding($email, "UTF-8", "auto"),
-        "AddressLine1"     => mb_convert_encoding($address1, "UTF-8", "auto"),
-        "AddressLine2"     => mb_convert_encoding($address2, "UTF-8", "auto"),
-        "State"            => mb_convert_encoding($state, "UTF-8", "auto"),
-        "City"             => mb_convert_encoding($city, "UTF-8", "auto"),
-        "Country"          => mb_convert_encoding($country, "UTF-8", "auto"),
-        "Fax"              => mb_convert_encoding($fax, "UTF-8", "auto"),
-        "FaxCountryCode"   => mb_convert_encoding($faxcc, "UTF-8", "auto"),
-        "Phone"            => mb_convert_encoding($phone, "UTF-8", "auto"),
-        "PhoneCountryCode" => mb_convert_encoding($phonecc, "UTF-8", "auto"),
-        "Type"             => mb_convert_encoding("Contact", "UTF-8", "auto"),
-        "ZipCode"          => mb_convert_encoding($postcode, "UTF-8", "auto"),
-        "Status"           => mb_convert_encoding("", "UTF-8", "auto")
-    ];
-
-    if(isset($params['FirstName'])){
-        unset($arr_client['status']);
+    // Tüm değerleri UTF-8'e dönüştür
+    foreach ($arr_client as $key => $value) {
+        $arr_client[$key] = mb_convert_encoding($value, "UTF-8", "auto");
     }
 
     return $arr_client;
@@ -1521,5 +1403,54 @@ function domainnameapi_exchangerates() {
 
 
     return $rates;
+}
+
+
+function domainnameapi_service($params) {
+    require_once __DIR__.'/lib/dna.php';
+
+    $username = $params["API_UserName"];
+    $password = $params["API_Password"];
+    $testmode = $params["API_TestMode"];
+
+    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+
+    return $dna;
+}
+function domainnameapi_service2($params) {
+
+
+    require_once __DIR__.'/lib/DNA/ModifierTrait.php';
+    require_once __DIR__.'/lib/DNA/DomainTrait.php';
+    require_once __DIR__.'/lib/DNA/Client.php';
+    require_once __DIR__.'/lib/DNA/ServiceFactory.php';
+    require_once __DIR__.'/lib/DNA/SSLTrait.php';
+    require_once __DIR__.'/lib/DNA/Service.php';
+
+
+    $username   = $params["API_UserName"];
+    $password   = $params["API_Password"];
+    $resellerid = $params["API_ResellerId"];
+
+    $service=null;
+
+
+    $reseller_token = domainnameapi_parse_cache('auth_token_'.md5($username.$password.$resellerid), 1800, function () use ($username, $password, $resellerid) {
+
+        $service = \DNA\ServiceFactory::createWithCredentials($username, $password, $resellerid);
+
+        if($service->isAuthenticated()) {
+            return $service->getToken();
+        }else{
+            return false;
+        }
+    });
+
+    if($reseller_token !== false){
+        $service = \DNA\ServiceFactory::createWithToken($reseller_token,$resellerid);
+    }
+
+    return $service;
+
 }
 
