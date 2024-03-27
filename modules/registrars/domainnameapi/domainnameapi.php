@@ -348,23 +348,20 @@ function domainnameapi_SaveRegistrarLock($params) {
 }
 
 function domainnameapi_RegisterDomain($params) {
- $values=[];
-
-  $dna = domainnameapi_service($params);
-
-
+ $values = [];
+    $is_v2 = $params["New_System"] === true || $params["New_System"] == 'on';
     $nameServers = [];
     $period = 1;
     $privacyProtection = false;
 
-    // Set nameservers
-    foreach ([1,2,3,4,5] as $k => $v) {
+    // Nameservers ayarlama
+    foreach ([1,2,3,4,5] as $v) {
         if (isset($params["ns{$v}"]) && trim($params["ns{$v}"]) != "") {
             $nameServers[] = $params["ns{$v}"];
         }
     }
 
-    // Set period
+    // Kayıt süresini ve gizlilik korumasını ayarlama
     if (isset($params["regperiod"]) && is_numeric($params["regperiod"])) {
         $period = intval($params["regperiod"]);
     }
@@ -372,53 +369,52 @@ function domainnameapi_RegisterDomain($params) {
         $privacyProtection = true;
     }
 
-    $addionalfields = [];
-
-    if($dna->isTrTLD($params["sld"] . "." . $params["tld"])){
-        $addionalfields=domainnameapi_parse_trcontact($params);
+    // API sürümüne göre işlemleri ayarlama
+    if ($is_v2) {
+        $dna = domainnameapi_service2($params);
+        $contactInfoFunction = 'domainnameapiv2_parse_clientinfo';
+        $trContactFunction = 'domainnameapiv2_parse_trcontact';
+    } else {
+        $dna = domainnameapi_service($params);
+        $contactInfoFunction = 'domainnameapi_parse_clientinfo';
+        $trContactFunction = 'domainnameapi_parse_trcontact';
     }
 
-    // Register Domain
+    $additionalfields = $dna->isTrTLD($params["sld"] . "." . $params["tld"]) ? $trContactFunction($params) : [];
+
+    // Alan adı kaydı
     $result = $dna->RegisterWithContactInfo(
-        // Domain name
         $params["sld"] . "." . $params["tld"],
-        // Years
         $period,
-        // Contact informations
         [
-            // Administrative contact
-            "Administrative" => domainnameapi_parse_clientinfo($params),
-            // Billing contact
-            "Billing" => domainnameapi_parse_clientinfo($params),
-            // Technical contact
-            "Technical" => domainnameapi_parse_clientinfo($params),
-            // Registrant contact
-            "Registrant" => domainnameapi_parse_clientinfo($params),
+            "Administrative" => $contactInfoFunction($params),
+            "Billing" => $contactInfoFunction($params),
+            "Technical" => $contactInfoFunction($params),
+            "Registrant" => $contactInfoFunction($params),
         ],
-        // Nameservers
         $nameServers,
-        // Theft protection lock enabled
         false,
-        // Privacy Protection enabled
         $privacyProtection,
-        //Adddionalattributes
-        $addionalfields
+        $additionalfields
     );
 
-    if($result["result"] == "OK") {
+    // Sonuç işleme
+    if ($result["result"] == "OK") {
         $values = ["success" => true];
     } else {
         $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
     }
 
-    // Log request
-    logModuleCall("domainnameapi",
-        substr(__FUNCTION__, 14),
+    // İsteği loglama
+    logModuleCall(
+        "domainnameapi",
+        "unified_RegisterDomain",
         $dna->getRequestData(),
         $dna->getResponseData(),
         $values,
-        [$username,$password]
+        [$params["API_UserName"], $params["API_Password"]]
     );
+
     return $values;
 }
 
