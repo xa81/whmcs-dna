@@ -37,30 +37,64 @@ function domainnameapi_getConfigArray($params) {
             $sysMsg = 'Please enter your username and password';
         }else{
 
-            require_once __DIR__ . '/lib/dna.php';
-
             $username = $params["API_UserName"];
 
             $password = $params["API_Password"];
-            $testmode = $params["API_TestMode"];
+            $resellerid = $params["API_ResellerID"];
+            $sys = $params["API_SYSType"];
 
 
-            $sysMsg = domainnameapi_parse_cache('user_'.$username.md5($password).$testmode, 100, function () use ($username, $password, $testmode) {
-                $dna     = new \DomainNameApi\DomainNameAPI_PHPLibrary($username, $password, $testmode);
-                $details = $dna->GetResellerDetails();
+            $sysMsg = domainnameapi_parse_cache('user_'.$username.md5($password.$password.$resellerid.$sys), 100, function () use ($username, $password, $sys,$params) {
+                $is_v2 = $sys === true || $sys == 'on';
 
-                $sysMsg='';
+                $oops_msg = "Username and password combination not correct<br>Don't have an Domain Name API account yet? Get one here: <a href='https://www.domainnameapi.com/become-a-reseller' target='_blank'>https://www.domainnameapi.com/become-a-reseller</a>";
 
-                if ($details['result'] != 'OK') {
-                     $sysMsg = "Username and password combination not correct";
+                if (!$is_v2) {
+                    $dna = domainnameapi_service($params);
+
+                    $details = $dna->GetResellerDetails();
+
+
+                    $sysMsg = '';
+
+                    if ($details['result'] != 'OK') {
+                        $sysMsg = $oops_msg;
+                    } else {
+                        $balances = [];
+                        $sysMsg   = "<span style='color: brown;'>SYSv1</span> | User: <b>{$details['name']}({$details['id']})</b> , Balance: ";
+                        foreach ($details['balances'] as $k => $v) {
+                            $balances[] = "<b>{$v['balance']}{$v['symbol']}</b>";
+                        }
+                        $sysMsg .= implode(' | ', $balances);
+                    }
                 } else {
-                    $balances = [];
-                     $sysMsg = "User: <b>{$details['name']}({$details['id']})</b> , Balance: ";
-                    foreach ($details['balances'] as $k => $v) {
-                        $balances[]= "<b>{$v['balance']}{$v['symbol']}</b>";
-                     }
-                    $sysMsg .= implode(' | ', $balances);
+                    $dna = domainnameapi_service2($params);
 
+                    $sysMsg = '';
+
+                    //if ($dna === null) {
+                    //    $sysMsg = $oops_msg;
+                    //} else {
+                        $details = $dna->getCurrentBalance();
+
+
+                        if ($details['success'] !== true) {
+                            $sysMsg = $oops_msg;
+                        } else {
+                            $balances = [];
+                            $sysMsg   = "<span style='color: brown;'>SYSv2</span> | User: <b>{$details['resellerName']}({$details['id']})</b> , Balance: ";
+
+                            if ($details['usdBalance'] > 0) {
+                                $balances[] = "<b>{$details['usdBalance']}$</b>";
+                            }
+                            if ($details['tryBalance'] > 0) {
+                                $balances[] = "<b>{$details['tryBalance']}₺</b>";
+                            }
+
+
+                            $sysMsg .= implode(' | ', $balances);
+                        }
+                    //}
                 }
 
                 return $sysMsg;
@@ -76,7 +110,7 @@ function domainnameapi_getConfigArray($params) {
             ],
             "Description"  => [
                 "Type"  => "System",
-                "Value" => $sysMsg ."<br>Don't have an Domain Name API account yet? Get one here: <a href='https://www.domainnameapi.com/become-a-reseller' target='_blank'>https://www.domainnameapi.com/become-a-reseller</a>"
+                "Value" => $sysMsg
             ],
             "API_UserName" => [
                 "FriendlyName" => "Legacy System UserName",
@@ -91,32 +125,21 @@ function domainnameapi_getConfigArray($params) {
                 "Size"         => "20",
                 "Default"      => "ownerpass"
             ],
-            "New_System" => [
-                "FriendlyName" => "New System",
-                "Type"         => "yesno",
-                "Default"      => "yes",
-                "Description"  => "Have you migrated or using new system ? Then fill informations below."
-            ],
-            "New_UserName" => [
-                "FriendlyName" => "New System UserName",
-                "Type"         => "text",
-                "Size"         => "20",
-                "Default"      => "",
-                'Description'  => 'Require for New system. If you checked New System then all fields below are required.',
-            ],
-            "New_Password" => [
-                "FriendlyName" => "New System Password",
-                "Type"         => "password",
-                "Size"         => "20",
-                "Default"      => ""
-            ],
-            "New_ResellerId" => [
+            "API_ResellerID" => [
                 "FriendlyName" => "New System ResellerId",
                 "Type"         => "text",
                 "Size"         => "20",
                 "Default"      => "",
                 'Description'  => '',
             ],
+            "API_SYSType" => [
+                "FriendlyName" => "New System",
+                "Type"         => "yesno",
+                "Default"      => "no",
+                "Description"  => "Have you migrated or using new system ? Then fill informations below."
+            ],
+
+
             'TrIdendity'   => [
                 'FriendlyName' => 'Turkish Identity',
                 'Type'         => 'dropdown',
@@ -169,7 +192,7 @@ function domainnameapi_getConfigArray($params) {
 
 function domainnameapi_GetNameservers($params) {
 
-    $is_v2       = $params["New_System"] === true || $params["New_System"] == 'on';
+    $is_v2       = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
     $domain_name = $params['sld'] . '.' . $params['tld'];
     $values      = [];
 
@@ -216,7 +239,7 @@ function domainnameapi_GetNameservers($params) {
 function domainnameapi_SaveNameservers($params) {
     $values      = $nsList = [];
     $domain_name = $params['sld'] . '.' . $params['tld'];
-    $is_v2       = $params["New_System"] === true || $params["New_System"] == 'on';
+    $is_v2       = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
 
     // Nameserver listesini hazırla
     foreach ([1, 2, 3, 4, 5] as $v) {
@@ -349,7 +372,7 @@ function domainnameapi_SaveRegistrarLock($params) {
 
 function domainnameapi_RegisterDomain($params) {
  $values = [];
-    $is_v2 = $params["New_System"] === true || $params["New_System"] == 'on';
+    $is_v2 = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
     $nameServers = [];
     $period = 1;
     $privacyProtection = false;
@@ -405,10 +428,10 @@ function domainnameapi_RegisterDomain($params) {
         $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
     }
 
-    // İsteği loglama
-    logModuleCall(
-        "domainnameapi",
-        "unified_RegisterDomain",
+
+
+    logModuleCall("domainnameapi",
+        substr(__FUNCTION__, 14),
         $dna->getRequestData(),
         $dna->getResponseData(),
         $values,
@@ -419,42 +442,64 @@ function domainnameapi_RegisterDomain($params) {
 }
 
 function domainnameapi_TransferDomain($params) {
-$values=[];
+$values = [];
+    $is_v2 = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
 
- $dna = domainnameapi_service($params);
-    // Process request
-    $result = $dna->Transfer($params["sld"].".".$params["tld"], $params["transfersecret"],$params['regperiod']);
-
-    if($result["result"] == "OK") {
-       $values = ["success" => true];
+    if ($is_v2) {
+        $dna    = domainnameapi_service2($params);
+        $result = $dna->transfer($params["sld"] . "." . $params["tld"], $params["transfersecret"],
+            $params['regperiod']);
+        if ($result["success"] === true) {
+            $values = ["success" => true];
+        } else {
+            $values["error"] = $result["error"]["code"] . " - " . $result["error"]["message"];
+        }
     } else {
-        $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        $dna    = domainnameapi_service($params);
+        $result = $dna->Transfer($params["sld"] . "." . $params["tld"], $params["transfersecret"],
+            $params['regperiod']);
+        if ($result["result"] == "OK") {
+            $values = ["success" => true];
+        } else {
+            $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        }
     }
 
-    // Log request
     logModuleCall("domainnameapi",
         substr(__FUNCTION__, 14),
         $dna->getRequestData(),
         $dna->getResponseData(),
         $values,
-        [$username,$password]
+        [$params["API_UserName"], $params["API_Password"]]
     );
+
 
     return $values;
 }
 
 function domainnameapi_RenewDomain($params) {
-    $values=[];
+    $values = [];
+    $is_v2  = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
 
-    $dna = domainnameapi_service($params);
+    if ($is_v2) {
+        $dna = domainnameapi_service2($params);
 
-    // Process request
-    $result = $dna->Renew($params["sld"].".".$params["tld"], $params["regperiod"]);
+        $result = $dna->renew($params["sld"] . "." . $params["tld"], $params["regperiod"]);
 
-    if($result["result"] == "OK") {
-        $values = ["success" => true];
+        if ($result["success"] === true) {
+            $values = ["success" => true];
+        } else {
+            $values["error"] = $result["error"]["code"] . " - " . $result["error"]["message"];
+        }
     } else {
-        $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        $dna    = domainnameapi_service($params);
+        $result = $dna->Renew($params["sld"] . "." . $params["tld"], $params["regperiod"]);
+
+        if ($result["result"] == "OK") {
+            $values = ["success" => true];
+        } else {
+            $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        }
     }
 
     // Log request
@@ -462,33 +507,48 @@ function domainnameapi_RenewDomain($params) {
         substr(__FUNCTION__, 14),
         $dna->getRequestData(),
         $dna->getResponseData(),
-        $values,
-        [$username,$password]
+        $values
     );
 
     return $values;
 }
 
 function domainnameapi_GetContactDetails($params) {
-$values=[];
-     $dna = domainnameapi_service($params);
+    $values = [];
+    $is_v2  = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
 
-    // Process request
-    $result = $dna->GetContacts($params["sld"].".".$params["tld"]);
+    if ($is_v2) {
+        $dna    = domainnameapi_service2($params);
+        $result = $dna->getDomainDetails($params['sld'] . '.' . $params['tld']);
 
-    if($result["result"] == "OK")
-    {
-        $values = [
-            'RegistrantContact'=>domainnameapi_parse_contact($result["data"]["contacts"]["Registrant"]),
-            'AdministrativeContact'=>domainnameapi_parse_contact($result["data"]["contacts"]["Administrative"]),
-            'BillingContact'=>domainnameapi_parse_contact($result["data"]["contacts"]["Billing"]),
-            'TechnicalContact'=>domainnameapi_parse_contact($result["data"]["contacts"]["Technical"]),
-        ];
+        if ($result["success"] === true) {
+            $values = [
+                'RegistrantContact'     => domainnameapi_parse_contact($result["contacts"], "Registrant",true),
+                'AdministrativeContact' => domainnameapi_parse_contact($result["contacts"], "Administrative",true),
+                'BillingContact'        => domainnameapi_parse_contact($result["contacts"], "Billing",true),
+                'TechnicalContact'      => domainnameapi_parse_contact($result["contacts"], "Technical",true),
+            ];
+        } else {
+            $values["error"] = $result["error"]["code"] . " - " . $result["error"]["message"];
+        }
 
-    }
-    else
-    {
-        $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+    }else {
+        $dna = domainnameapi_service($params);
+
+        // Process request
+        $result = $dna->GetContacts($params["sld"] . "." . $params["tld"]);
+
+        if ($result["result"] == "OK") {
+            $contact_arr = $result["data"]["contacts"];
+            $values = [
+                'RegistrantContact'     => domainnameapi_parse_contact($contact_arr,"Registrant"),
+                'AdministrativeContact' => domainnameapi_parse_contact($contact_arr,"Administrative"),
+                'BillingContact'        => domainnameapi_parse_contact($contact_arr,"Billing"),
+                'TechnicalContact'      => domainnameapi_parse_contact($contact_arr,"Technical"),
+            ];
+        } else {
+            $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        }
     }
 
     // Log request
@@ -496,35 +556,54 @@ $values=[];
         substr(__FUNCTION__, 14),
         $dna->getRequestData(),
         $dna->getResponseData(),
-        $values,
-        [$username,$password]
+        $values
     );
 
     return $values;
 }
 
 function domainnameapi_SaveContactDetails($params) {
-$values=[];
+    $values = [];
+    $is_v2  = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
 
- $dna = domainnameapi_service($params);
-    // Process request
-    $result = $dna->SaveContacts(
+    if ($is_v2) {
+        $dna = domainnameapi_service2($params);
 
-    // DOMAIN NAME
-        $params["sld"].".".$params["tld"],
-        [
-            "Administrative" => domainnameapi_parse_clientinfo($params["contactdetails"]["AdministrativeContact"]),
-            "Billing" =>domainnameapi_parse_clientinfo($params["contactdetails"]["BillingContact"]),
-            "Technical" =>domainnameapi_parse_clientinfo($params["contactdetails"]["TechnicalContact"]),
-            "Registrant" => domainnameapi_parse_clientinfo($params["contactdetails"]["RegistrantContact"])
+        $result = $dna->saveContacts(
 
-        ]
-    );
+        // DOMAIN NAME
+            $params["sld"] . "." . $params["tld"], [
+                "Registrant"     => domainnameapi_parse_clientinfo($params["contactdetails"]["RegistrantContact"],true),
+                "Administrative" => domainnameapi_parse_clientinfo($params["contactdetails"]["AdministrativeContact"],true),
+                "Billing"        => domainnameapi_parse_clientinfo($params["contactdetails"]["BillingContact"],true),
+                "Technical"      => domainnameapi_parse_clientinfo($params["contactdetails"]["TechnicalContact"],true),
 
-    if($result["result"] == "OK") {
-        $values = ["success" => true];
+            ]);
+
+        if ($result["success"] === true) {
+            $values = ["success" => true];
+        } else {
+            $values["error"] = $result["error"]["code"] . " - " . $result["error"]["message"];
+        }
     } else {
-        $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        $dna = domainnameapi_service($params);
+        // Process request
+        $result = $dna->SaveContacts(
+
+        // DOMAIN NAME
+            $params["sld"] . "." . $params["tld"], [
+                "Administrative" => domainnameapi_parse_clientinfo($params["contactdetails"]["AdministrativeContact"]),
+                "Billing"        => domainnameapi_parse_clientinfo($params["contactdetails"]["BillingContact"]),
+                "Technical"      => domainnameapi_parse_clientinfo($params["contactdetails"]["TechnicalContact"]),
+                "Registrant"     => domainnameapi_parse_clientinfo($params["contactdetails"]["RegistrantContact"])
+
+            ]);
+
+        if ($result["result"] == "OK") {
+            $values = ["success" => true];
+        } else {
+            $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        }
     }
 
     // Log request
@@ -532,35 +611,47 @@ $values=[];
         substr(__FUNCTION__, 14),
         $dna->getRequestData(),
         $dna->getResponseData(),
-        $values,
-        [$username,$password]
+        $values
     );
     return $values;
 }
 
 function domainnameapi_GetEPPCode($params) {
-$values=[];
+    $values = [];
+    $is_v2  = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
 
- $dna = domainnameapi_service($params);
+    if ($is_v2) {
+        $dna = domainnameapi_service2($params);
+        // Process request
+        $result = $dna->getDomainDetails($params["sld"] . "." . $params["tld"]);
 
-    // Process request
-    $result = $dna->GetDetails($params["sld"].".".$params["tld"]);
-
-    if($result["result"] == "OK")
-    {
-        if(isset($result["data"]["AuthCode"]))
-        {
-            $values["eppcode"] = $result["data"]["AuthCode"];
+        if ($result["success"] === true) {
+            if (isset($result["authCode"])) {
+                $values["eppcode"] = $result["authCode"];
+            } else {
+                $values["error"] = "EPP Code can not reveived from registrar!";
+            }
+        } else {
+            $values["error"] = $result["error"]["code"] . " - " . $result["error"]["message"];
         }
-        else
-        {
-            $values["error"] = "EPP Code can not reveived from registrar!";
+    } else {
+        $dna = domainnameapi_service($params);
+
+        // Process request
+        $result = $dna->GetDetails($params["sld"] . "." . $params["tld"]);
+
+        if ($result["result"] == "OK") {
+            if (isset($result["data"]["AuthCode"])) {
+                $values["eppcode"] = $result["data"]["AuthCode"];
+            } else {
+                $values["error"] = "EPP Code can not reveived from registrar!";
+            }
+        } else {
+            $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
         }
     }
-    else
-    {
-        $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
-    }
+
+
 
 
     // Log request
@@ -568,8 +659,7 @@ $values=[];
         substr(__FUNCTION__, 14),
         $dna->getRequestData(),
         $dna->getResponseData(),
-        $values,
-        [$username,$password]
+        $values
     );
     return $values;
 }
@@ -577,80 +667,123 @@ $values=[];
 function domainnameapi_RegisterNameserver($params) {
     $values=[];
 
-     $dna = domainnameapi_service($params);
+    $is_v2 = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
 
-    // Process request
-    $result = $dna->AddChildNameServer($params["sld"].".".$params["tld"], $params["nameserver"], $params["ipaddress"]);
+    if ($is_v2) {
+        $dna = domainnameapi_service2($params);
+        // Process request
+        $result = $dna->AddChildNameServer($params["sld"] . "." . $params["tld"], $params["nameserver"],
+            $params["ipaddress"]);
 
-    if ($result["result"] == "OK") {
-        $values["success"] = true;
+        if ($result["success"] === true) {
+            $values["success"] = true;
+        } else {
+            $values["error"] = $result["error"]["code"] . " - " . $result["error"]["message"];
+        }
     } else {
-        $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        $dna = domainnameapi_service($params);
+
+        // Process request
+        $result = $dna->AddChildNameServer($params["sld"] . "." . $params["tld"], $params["nameserver"],
+            $params["ipaddress"]);
+
+        if ($result["result"] == "OK") {
+            $values["success"] = true;
+        } else {
+            $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        }
     }
+
+
 
     // Log request
     logModuleCall("domainnameapi",
         substr(__FUNCTION__, 14),
         $dna->getRequestData(),
         $dna->getResponseData(),
-        $values,
-        [$username,$password]
+        $values
     );
     return $values;
 }
 
-function domainnameapi_ModifyNameserver($params) {
+function domainnameapi_ModifyNameserver($params)
+{
+    $values = [];
+    $is_v2  = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
 
-  $values=[];
+    if ($is_v2) {
+        $dna = domainnameapi_service2($params);
+        // Process request
+        // Process request
+        $result = $dna->ModifyChildNameServer($params["sld"] . "." . $params["tld"], $params["nameserver"],
+            $params["newipaddress"]);
 
-   $dna = domainnameapi_service($params);
-
-
-    // Process request
-    $result = $dna->ModifyChildNameServer(
-        $params["sld"].".".$params["tld"],
-        $params["nameserver"],
-        $params["newipaddress"]
-    );
-
-    if ($result["result"] == "OK") {
-        $values["success"] = true;
+        if ($result["success"] === true) {
+            $values["success"] = true;
+        } else {
+            $values["error"] = $result["error"]["code"] . " - " . $result["error"]["message"];
+        }
     } else {
-        $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        $dna = domainnameapi_service($params);
+
+        $result = $dna->ModifyChildNameServer($params["sld"] . "." . $params["tld"], $params["nameserver"],
+            $params["newipaddress"]);
+
+        if ($result["result"] == "OK") {
+            $values["success"] = true;
+        } else {
+            $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        }
     }
+
 
     // Log request
     logModuleCall("domainnameapi",
         substr(__FUNCTION__, 14),
         $dna->getRequestData(),
         $dna->getResponseData(),
-        $values,
-        [$username,$password]
+        $values
     );
     return $values;
 }
 
 function domainnameapi_DeleteNameserver($params) {
     $values=[];
+    $is_v2 = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
 
-     $dna = domainnameapi_service($params);
+    if ($is_v2) {
+        $dna = domainnameapi_service2($params);
 
-    // Process request
-    $result = $dna->DeleteChildNameServer($params["sld"].".".$params["tld"], $params["nameserver"]);
+        // Process request
+        $result = $dna->DeleteChildNameServer($params["sld"] . "." . $params["tld"], $params["nameserver"]);
 
-    if ($result["result"] == "OK") {
-        $values["success"] = true;
+
+        if ($result["success"] === true) {
+            $values["success"] = true;
+        } else {
+            $values["error"] = $result["error"]["code"] . " - " . $result["error"]["message"];
+        }
     } else {
-        $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        $dna = domainnameapi_service($params);
+
+        // Process request
+        $result = $dna->DeleteChildNameServer($params["sld"] . "." . $params["tld"], $params["nameserver"]);
+
+        if ($result["result"] == "OK") {
+            $values["success"] = true;
+        } else {
+            $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        }
     }
+
+
 
     // Log request
     logModuleCall("domainnameapi",
         substr(__FUNCTION__, 14),
         $dna->getRequestData(),
         $dna->getResponseData(),
-        $values,
-        [$username,$password]
+        $values
     );
 
     return $values;
@@ -659,35 +792,56 @@ function domainnameapi_DeleteNameserver($params) {
 function domainnameapi_IDProtectToggle($params) {
  $values=[];
 
- $dna = domainnameapi_service($params);
+    $is_v2 = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
 
-    if($params["protectenable"]) {
-        // Process request
-        $result = $dna->ModifyPrivacyProtectionStatus($params["sld"].".".$params["tld"], true, "Owner\'s request");
+    if ($is_v2) {
+        $dna = domainnameapi_service2($params);
+
+        $values["error"] = 'This version not supported ID Protect';
     } else {
-        // Process request
-        $result = $dna->ModifyPrivacyProtectionStatus($params["sld"].".".$params["tld"], false, "Owner\'s request");
+        $dna = domainnameapi_service($params);
+
+        if ($params["protectenable"]) {
+            // Process request
+            $result = $dna->ModifyPrivacyProtectionStatus($params["sld"] . "." . $params["tld"], true,
+                "Owner\'s request");
+        } else {
+            // Process request
+            $result = $dna->ModifyPrivacyProtectionStatus($params["sld"] . "." . $params["tld"], false,
+                "Owner\'s request");
+        }
+
+        if ($result["result"] == "OK") {
+            $values = ["success" => true];
+        } else {
+            $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
+        }
     }
 
-    if ($result["result"] == "OK") {
-        $values = ["success" => true];
-    } else {
-        $values["error"] = $result["error"]["Message"] . " - " . $result["error"]["Details"];
-    }
+    // Log request
+
+
 
     // Log request
     logModuleCall("domainnameapi",
         substr(__FUNCTION__, 14),
         $dna->getRequestData(),
         $dna->getResponseData(),
-        $values,
-        [$username,$password]
+        $values
     );
     return $values;
 }
 
 function domainnameapi_GetDNS($params)
 {
+    $values = [];
+
+    $is_v2 = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
+
+    if($is_v2){
+
+    }
+
     $values["error"] = "DNS Management does not supported by Domain Name API.";
 
 
@@ -705,8 +859,11 @@ function domainnameapi_SaveDNS($params)
 function domainnameapi_CheckAvailability($params) {
     $values=[];
 
-     $dna = domainnameapi_service($params);
+    // Sistem versiyonunu kontrol et
+    $is_v2 = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
 
+    // Versiyona göre uygun servis fonksiyonunu başlat
+    $dna = $is_v2 ? domainnameapiv2_service($params) : domainnameapi_service($params);
 
     if($params['isIdnDomain']){
         $label = empty($params['punyCodeSearchTerm']) ? strtolower($params['searchTerm']) : strtolower($params['punyCodeSearchTerm']);
@@ -718,31 +875,28 @@ function domainnameapi_CheckAvailability($params) {
     $premiumEnabled = (bool) $params['premiumEnabled'];
     $domainslist = [];
     $results = new \WHMCS\Domains\DomainLookup\ResultsList();
-
-
-    $result=null;
-
-
-
     $all_tlds = [];
-    foreach ($tldslist as $k => $v) {
-        $all_tlds[]=ltrim($v,'.');
+
+    foreach ($tldslist as $tld) {
+        $all_tlds[] = ltrim($tld, '.');
     }
 
-
-    //$tld=str_replace(".","",$domain['tld']);
+    // Versiyona göre uygun CheckAvailability fonksiyonunu çağır
+    if ($is_v2) {
+        $result = $dna->CheckAvailability([$label], $all_tlds);
+    } else {
     $result = $dna->CheckAvailability([$label],$all_tlds,"1","create");
 
     $exchange_rates = domainnameapi_exchangerates();
+    }
 
-
-    foreach ($result as $k => $v) {
+    foreach ($result as $v) {
         $searchResult = new SearchResult($label, '.'.$v['TLD']);
 
         $register_price = $v['Price'];
         $renew_price = $v['Price'];
 
-        if(strpos($v['TLD'],'.tr' ) !== false){
+        if (!$is_v2 && strpos($v['TLD'], '.tr') !== false) {
             $register_price = $register_price / $exchange_rates['TRY'];
             $renew_price = $renew_price / $exchange_rates['TRY'];
         }
@@ -754,7 +908,7 @@ function domainnameapi_CheckAvailability($params) {
             $status = SearchResult::STATUS_NOT_REGISTERED;
             $searchResult->setStatus($status);
 
-            if ($v['IsFee'] == '1') {
+            if ($v['IsFee'] == '1' || ($is_v2 && $v['info']['isPremium'] == '1')) {
                 $searchResult->setPremiumDomain(true);
                 $searchResult->setPremiumCostPricing([
                         'register'     => $register_price,
@@ -771,32 +925,31 @@ function domainnameapi_CheckAvailability($params) {
     }
 
 
-
-
-
-    logModuleCall("domainnameapi",
-        substr(__FUNCTION__, 14),
+    logModuleCall(
+        "domainnameapi",
+        substr(__FUNCTION__, 16),
         $dna->getRequestData(),
         $dna->getResponseData(),
-        $values,
-        [$username,$password]
+        $values
     );
 
 
     return $results;
-
-
-
 }
+
 
 function domainnameapi_GetDomainSuggestions($params) {
-   $values=[];
+    $values = [];
 
-    $dna = domainnameapi_service($params);
+    // Sistem versiyonunu kontrol et
+    $is_v2 = $params["API_SYSType"] === true || $params["API_SYSType"] == 'on';
 
-    if($params['isIdnDomain']){
+    // Versiyona göre uygun servis fonksiyonunu başlat
+    $dna = $is_v2 ? domainnameapiv2_service($params) : domainnameapi_service($params);
+
+    if ($params['isIdnDomain']) {
         $label = empty($params['punyCodeSearchTerm']) ? strtolower($params['searchTerm']) : strtolower($params['punyCodeSearchTerm']);
-    }else{
+    } else {
         $label = strtolower($params['searchTerm']);
     }
 
@@ -804,71 +957,65 @@ function domainnameapi_GetDomainSuggestions($params) {
     $premiumEnabled = (bool) $params['premiumEnabled'];
     $domainslist = [];
     $results = new \WHMCS\Domains\DomainLookup\ResultsList();
-
-    $result=null;
-
     $all_tlds = [];
-    foreach ($tldslist as $k => $v) {
-        $all_tlds[]=ltrim($v,'.');
+
+    foreach ($tldslist as $tld) {
+        $all_tlds[] = ltrim($tld, '.');
     }
 
+    // Versiyona göre uygun CheckAvailability fonksiyonunu çağır
+    $result = $dna->CheckAvailability([$label], $all_tlds, "1", "create");
 
-    //$tld=str_replace(".","",$domain['tld']);
-    $result = $dna->CheckAvailability([$label],$all_tlds,"1","create");
+    if (!$is_v2) {
+        $exchange_rates = domainnameapi_exchangerates();
+    }
 
-    $exchange_rates = domainnameapi_exchangerates();
+    foreach ($result as $v) {
+        $searchResult = new SearchResult($label, '.' . $v['TLD']);
+        $register_price = isset($v['Price']) ? $v['Price'] : $v['info']['price'];
+        $renew_price = isset($v['Price']) ? $v['Price'] : $v['info']['price'];
 
-
-    foreach ($result as $k => $v) {
-        $searchResult = new SearchResult($label, '.'.$v['TLD']);
-
-        $register_price = $v['Price'];
-        $renew_price = $v['Price'];
-
-        if(strpos($v['TLD'],'.tr' ) !== false){
+        if (!$is_v2 && strpos($v['TLD'], '.tr') !== false) {
             $register_price = $register_price / $exchange_rates['TRY'];
             $renew_price = $renew_price / $exchange_rates['TRY'];
         }
 
+        $available = $is_v2 ? ($v['info']['status'] == 'AVAILABLE') : ($v['Status'] == 'available');
+        $isPremium = $is_v2 ? $v['info']['isPremium'] : $v['IsFee'];
 
-
-        if ($v['Status'] == 'available') {
-
+        if ($available) {
             $status = SearchResult::STATUS_NOT_REGISTERED;
             $searchResult->setStatus($status);
 
-            if ($v['IsFee'] == '1') {
+            if ($isPremium == '1') {
                 $searchResult->setPremiumDomain(true);
                 $searchResult->setPremiumCostPricing([
-                        'register'     => $register_price,
-                        'renew'        => $renew_price,
-                        'CurrencyCode' => 'USD',
-                    ]);
+                    'register'     => $register_price,
+                    'renew'        => $renew_price,
+                    'CurrencyCode' => 'USD',
+                ]);
             }
-
-        }else{
+        } else {
             $status = SearchResult::STATUS_REGISTERED;
             $searchResult->setStatus($status);
         }
-      $results->append($searchResult);
+
+        $results->append($searchResult);
     }
 
 
-
-
-
-    logModuleCall("domainnameapi",
-        substr(__FUNCTION__, 14),
+    logModuleCall(
+        "domainnameapi",
+        substr(__FUNCTION__, 16),
         $dna->getRequestData(),
         $dna->getResponseData(),
-        $values,
-        [$username,$password]
+        $values
     );
 
 
     return $results;
-
 }
+
 
 function domainnameapi_GetTldPricing($params) {
     // Perform API call to retrieve extension information
@@ -1179,31 +1326,42 @@ function domainnameapi_AdminDomainsTabFields($params){
 
 }
 
-function domainnameapi_parse_contact($params) {
 
+function domainnameapi_parse_contact($params,$contacttype='Registrant',$is_v2=false) {
+
+     if ($is_v2) {
+        // Yeni API için iletişim bilgileri yapısı
+        $filteredContacts = array_filter($params['contacts'], function ($contact) use ($contacttype) {
+            return $contact['contactType'] == $contacttype;
+        });
+        $contact = reset($filteredContacts) ?: []; // Eğer $filteredContacts boşsa, boş bir dizi döndür
+    } else {
+        // Eski API için iletişim bilgileri yapısı
+        $contact = $params[$contacttype];
+    }
+
+    // Ortak dönüş yapısı, veri kaynağına göre ayarlanır
     return [
-        "First Name"         => $params["FirstName"],
-        "Last Name"          => $params["LastName"],
-        "Company Name"       => $params["Company"],
-        "Email"              => $params["EMail"],
-        "Phone Country Code" => $params["Phone"]["Phone"]["CountryCode"],
-        "Phone"              => $params["Phone"]["Phone"]["Number"],
-        "Fax Country Code"   => $params["Phone"]["Fax"]["CountryCode"],
-        "Fax"                => $params["Phone"]["Fax"]["Number"],
-        "Address 1"          => $params["Address"]["Line1"],
-        "Address 2"          => $params["Address"]["Line2"],
-        "Address 3"          => $params["Address"]["Line3"],
-        "State"              => $params["Address"]["State"],
-        "City"               => $params["Address"]["City"],
-        "Country"            => $params["Address"]["Country"],
-        "ZIP Code"           => $params["Address"]["ZipCode"],
+        "First Name"         => $contact["firstName"] ?? $contact["FirstName"],
+        "Last Name"          => $contact["lastName"] ?? $contact["LastName"],
+        "Company Name"       => $contact["companyName"] ?? $contact["Company"],
+        "Email"              => $contact["eMail"] ?? $contact["EMail"],
+        "Phone Country Code" => $is_v2 ? $contact["phoneCountryCode"] : $contact["Phone"]["CountryCode"],
+        "Phone"              => $is_v2 ? $contact["phone"] : $contact["Phone"]["Number"],
+        "Fax Country Code"   => $is_v2 ? $contact["faxCountryCode"] : $contact["Fax"]["CountryCode"],
+        "Fax"                => $is_v2 ? $contact["fax"] : $contact["Fax"]["Number"],
+        "Address 1"          => $contact["address"] ?? $contact["Address"]["Line1"],
+        "Address 2"          => $contact["addressLine2"] ?? $contact["Address"]["Line2"], // Opsiyonel, eski API'de yoksa boş geç
+        "State"              => $contact["state"] ?? $contact["Address"]["State"],
+        "City"               => $contact["city"] ?? $contact["Address"]["City"],
+        "Country"            => $contact["country"] ?? $contact["Address"]["Country"],
+        "ZIP Code"           => $contact["postalCode"] ?? $contact["Address"]["ZipCode"]
     ];
 
 }
 
-function domainnameapi_parse_clientinfo($params) {
+function domainnameapi_parse_clientinfo($params,$is_v2=false) {
 
-    $is_v2 = $params["New_System"] === true || $params["New_System"] == 'on';
 
     $firstname   = $params["First Name"] ?? $params["firstname"];
     $lastname    = $params["Last Name"] ?? $params["lastname"];
@@ -1267,6 +1425,8 @@ function domainnameapi_parse_clientinfo($params) {
 
     return $arr_client;
 }
+
+
 
 function domainnameapi_parse_trcontact($contactDetails) {
     $cf = [];
@@ -1407,21 +1567,22 @@ function domainnameapi_service($params) {
 
     $username = $params["API_UserName"];
     $password = $params["API_Password"];
-    $testmode = $params["API_TestMode"];
 
-    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password,$testmode);
+    $dna = new \DomainNameApi\DomainNameAPI_PHPLibrary($username,$password);
 
     return $dna;
 }
 function domainnameapi_service2($params) {
 
+    if (!trait_exists('DNA\ModifierTrait')) {
+        require_once __DIR__ . '/lib/DNA/ModifierTrait.php';
+        require_once __DIR__ . '/lib/DNA/DomainTrait.php';
+        require_once __DIR__ . '/lib/DNA/Client.php';
+        require_once __DIR__ . '/lib/DNA/ServiceFactory.php';
+        require_once __DIR__ . '/lib/DNA/SSLTrait.php';
+        require_once __DIR__ . '/lib/DNA/Service.php';
+    }
 
-    require_once __DIR__.'/lib/DNA/ModifierTrait.php';
-    require_once __DIR__.'/lib/DNA/DomainTrait.php';
-    require_once __DIR__.'/lib/DNA/Client.php';
-    require_once __DIR__.'/lib/DNA/ServiceFactory.php';
-    require_once __DIR__.'/lib/DNA/SSLTrait.php';
-    require_once __DIR__.'/lib/DNA/Service.php';
 
 
     $username   = $params["API_UserName"];
@@ -1442,9 +1603,9 @@ function domainnameapi_service2($params) {
         }
     });
 
-    if($reseller_token !== false){
-        $service = \DNA\ServiceFactory::createWithToken($reseller_token,$resellerid);
-    }
+
+    $service = \DNA\ServiceFactory::createWithToken($reseller_token,$resellerid);
+
 
     return $service;
 
