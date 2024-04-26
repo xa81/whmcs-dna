@@ -403,17 +403,17 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Get Domain details
-     * @param string $DomainName
+     * @param string $domainName
      * @return array
      */
-    public function GetDetails($DomainName) {
+    public function GetDetails($domainName) {
 
 
         $parameters = [
             "request" => [
                 "Password"   => $this->_USERDATA_PASSWORD,
                 "UserName"   => $this->_USERDATA_USERNAME,
-                "DomainName" => $DomainName
+                "DomainName" => $domainName
             ]
         ];
 
@@ -446,16 +446,16 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Modify Name Server, Nameservers must be valid array
-     * @param string $DomainName
+     * @param string $domainName
      * @param array $NameServers
      * @return array
      */
-    public function ModifyNameServer($DomainName, $NameServers) {
+    public function ModifyNameServer($domainName, $NameServers) {
         $parameters = [
             "request" => [
                 "Password"       => $this->_USERDATA_PASSWORD,
                 "UserName"       => $this->_USERDATA_USERNAME,
-                "DomainName"     => $DomainName,
+                "DomainName"     => $domainName,
                 "NameServerList" => array_values($NameServers)
             ]
         ];
@@ -482,15 +482,15 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Enable Theft Protection Lock for domain
-     * @param string $DomainName
+     * @param string $domainName
      * @return array
      */
-    public function EnableTheftProtectionLock($DomainName) {
+    public function EnableTheftProtectionLock($domainName) {
         $parameters = [
             "request" => [
                 "Password"   => $this->_USERDATA_PASSWORD,
                 "UserName"   => $this->_USERDATA_USERNAME,
-                "DomainName" => $DomainName
+                "DomainName" => $domainName
             ]
         ];
 
@@ -515,15 +515,15 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Disable Theft Protection Lock for domain
-     * @param string $DomainName
+     * @param string $domainName
      * @return array
      */
-    public function DisableTheftProtectionLock($DomainName) {
+    public function DisableTheftProtectionLock($domainName) {
         $parameters = [
             "request" => [
                 "Password"   => $this->_USERDATA_PASSWORD,
                 "UserName"   => $this->_USERDATA_USERNAME,
-                "DomainName" => $DomainName
+                "DomainName" => $domainName
             ]
         ];
 
@@ -547,17 +547,17 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Add Child Name Server for domain
-     * @param string $DomainName
+     * @param string $domainName
      * @param string $NameServer
      * @param string $IPAdresses
      * @return array
      */
-    public function AddChildNameServer($DomainName, $NameServer, $IPAdresses) {
+    public function AddChildNameServer($domainName, $NameServer, $IPAdresses) {
         $parameters = [
             "request" => [
                 "Password"        => $this->_USERDATA_PASSWORD,
                 "UserName"        => $this->_USERDATA_USERNAME,
-                "DomainName"      => $DomainName,
+                "DomainName"      => $domainName,
                 "ChildNameServer" => $NameServer,
                 "IpAddressList"   => [$IPAdresses]
             ]
@@ -581,16 +581,16 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Delete Child Name Server for domain
-     * @param string $DomainName
+     * @param string $domainName
      * @param string $NameServer
      * @return array
      */
-    public function DeleteChildNameServer($DomainName, $NameServer) {
+    public function DeleteChildNameServer($domainName, $NameServer) {
         $parameters = [
             "request" => [
                 "Password"        => $this->_USERDATA_PASSWORD,
                 "UserName"        => $this->_USERDATA_USERNAME,
-                "DomainName"      => $DomainName,
+                "DomainName"      => $domainName,
                 "ChildNameServer" => $NameServer
             ]
         ];
@@ -614,18 +614,18 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Modify IP of Child Name Server for domain
-     * @param string $DomainName
+     * @param string $domainName
      * @param string $NameServer
      * @param string $IPAdresses
      * @return array
      */
-    public function ModifyChildNameServer($DomainName, $NameServer, $IPAdresses) {
+    public function ModifyChildNameServer($domainName, $NameServer, $IPAdresses) {
 
         $parameters = [
             "request" => [
                 "Password"        => $this->_USERDATA_PASSWORD,
                 "UserName"        => $this->_USERDATA_USERNAME,
-                "DomainName"      => $DomainName,
+                "DomainName"      => $domainName,
                 "ChildNameServer" => $NameServer,
                 "IpAddressList"   => [$IPAdresses]
             ]
@@ -653,15 +653,15 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Get Contacts for domain, Administrative, Billing, Technical, Registrant segments will be returned
-     * @param string $DomainName
+     * @param string $domainName
      * @return array
      */
-    public function GetContacts($DomainName) {
+    public function GetContacts($domainName) {
         $parameters = [
             "request" => [
                 "Password"   => $this->_USERDATA_PASSWORD,
                 "UserName"   => $this->_USERDATA_USERNAME,
-                "DomainName" => $DomainName
+                "DomainName" => $domainName
             ]
         ];
 
@@ -708,16 +708,16 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Save Contacts for domain, Contacts segments will be saved as Administrative, Billing, Technical, Registrant.
-     * @param string $DomainName
+     * @param string $domainName
      * @param array $Contacts
      * @return array
      */
-    public function SaveContacts($DomainName, $Contacts) {
+    public function SaveContacts($domainName, $Contacts) {
         $parameters = [
             "request" => [
                 "Password"              => $this->_USERDATA_PASSWORD,
                 "UserName"              => $this->_USERDATA_USERNAME,
-                "DomainName"            => $DomainName,
+                "DomainName"            => $domainName,
                 "AdministrativeContact" => $Contacts["Administrative"],
                 "BillingContact"        => $Contacts["Billing"],
                 "TechnicalContact"      => $Contacts["Technical"],
@@ -757,17 +757,17 @@ class DomainNameAPI_PHPLibrary {
     // Start domain transfer (Incoming domain)
     /**
      * Transfer Domain
-     * @param string $DomainName
+     * @param string $domainName
      * @param string $AuthCode
      * @param int $Period
      * @return array
      */
-    public function Transfer($DomainName, $AuthCode, $Period) {
+    public function Transfer($domainName, $AuthCode, $Period) {
         $parameters = [
             "request" => [
                 "Password"             => $this->_USERDATA_PASSWORD,
                 "UserName"             => $this->_USERDATA_USERNAME,
-                "DomainName"           => $DomainName,
+                "DomainName"           => $domainName,
                 "AuthCode"             => $AuthCode,
                 'AdditionalAttributes' => [
                     'KeyValueOfstringstring' => [
@@ -813,14 +813,14 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Stops Incoming Transfer
-     * @param string $DomainName
+     * @param string $domainName
      */
-    public function CancelTransfer($DomainName) {
+    public function CancelTransfer($domainName) {
         $parameters = [
             "request" => [
                 "Password"   => $this->_USERDATA_PASSWORD,
                 "UserName"   => $this->_USERDATA_USERNAME,
-                "DomainName" => $DomainName
+                "DomainName" => $domainName
             ]
         ];
 
@@ -845,15 +845,15 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Approve Outgoing transfer
-     * @param $DomainName
+     * @param $domainName
      * @return mixed|string[]
      */
-    public function ApproveTransfer($DomainName) {
+    public function ApproveTransfer($domainName) {
         $parameters = [
             "request" => [
                 "Password"   => $this->_USERDATA_PASSWORD,
                 "UserName"   => $this->_USERDATA_USERNAME,
-                "DomainName" => $DomainName
+                "DomainName" => $domainName
             ]
         ];
 
@@ -874,15 +874,15 @@ class DomainNameAPI_PHPLibrary {
     }
     /**
      * Reject Outgoing transfer
-     * @param $DomainName
+     * @param $domainName
      * @return mixed|string[]
      */
-    public function RejectTransfer($DomainName) {
+    public function RejectTransfer($domainName) {
         $parameters = [
             "request" => [
                 "Password"   => $this->_USERDATA_PASSWORD,
                 "UserName"   => $this->_USERDATA_USERNAME,
-                "DomainName" => $DomainName
+                "DomainName" => $domainName
             ]
         ];
 
@@ -906,16 +906,16 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Renew domain
-     * @param string $DomainName
+     * @param string $domainName
      * @param int $Period
      * @return array
      */
-    public function Renew($DomainName, $Period) {
+    public function Renew($domainName, $Period) {
         $parameters = [
             "request" => [
                 "Password"   => $this->_USERDATA_PASSWORD,
                 "UserName"   => $this->_USERDATA_USERNAME,
-                "DomainName" => $DomainName,
+                "DomainName" => $domainName,
                 "Period"     => $Period
             ]
         ];
@@ -940,7 +940,7 @@ class DomainNameAPI_PHPLibrary {
     // Register domain with contact information
     /**
      * Register domain with contact information
-     * @param string $DomainName
+     * @param string $domainName
      * @param int $Period
      * @param array $Contacts
      * @param array $NameServers
@@ -949,12 +949,12 @@ class DomainNameAPI_PHPLibrary {
      * @param array $addionalAttributes
      * @return array
      */
-    public function RegisterWithContactInfo($DomainName, $Period, $Contacts, $NameServers = ["dns.domainnameapi.com", "web.domainnameapi.com"],  $TheftProtectionLock = true, $PrivacyProtection = false,$addionalAttributes=[]) {
+    public function RegisterWithContactInfo($domainName, $Period, $Contacts, $NameServers = ["dns.domainnameapi.com", "web.domainnameapi.com"],  $TheftProtectionLock = true, $PrivacyProtection = false,$addionalAttributes=[]) {
         $parameters = [
             "request" => [
                 "Password"                => $this->_USERDATA_PASSWORD,
                 "UserName"                => $this->_USERDATA_USERNAME,
-                "DomainName"              => $DomainName,
+                "DomainName"              => $domainName,
                 "Period"                  => $Period,
                 "NameServerList"          => $NameServers,
                 "LockStatus"              => $TheftProtectionLock,
@@ -1009,12 +1009,12 @@ class DomainNameAPI_PHPLibrary {
     // Modify privacy protection status of domain
     /**
      * Modify privacy protection status of domain
-     * @param string $DomainName
+     * @param string $domainName
      * @param bool $Status
      * @param string $Reason
      * @return array
      */
-    public function ModifyPrivacyProtectionStatus($DomainName, $Status, $Reason = "Owner request") {
+    public function ModifyPrivacyProtectionStatus($domainName, $Status, $Reason = "Owner request") {
         if (trim($Reason) == "") {
             $Reason = "Owner request";
         }
@@ -1023,7 +1023,7 @@ class DomainNameAPI_PHPLibrary {
             "request" => [
                 "Password"       => $this->_USERDATA_PASSWORD,
                 "UserName"       => $this->_USERDATA_USERNAME,
-                "DomainName"     => $DomainName,
+                "DomainName"     => $domainName,
                 "ProtectPrivacy" => $Status,
                 "Reason"         => $Reason
             ]
@@ -1047,15 +1047,15 @@ class DomainNameAPI_PHPLibrary {
 
     /**
      * Sync from registry, domain information will be updated from registry
-     * @param string $DomainName
+     * @param string $domainName
      * @return array
      */
-    public function SyncFromRegistry($DomainName) {
+    public function SyncFromRegistry($domainName) {
         $parameters = [
             "request" => [
                 "Password"   => $this->_USERDATA_PASSWORD,
                 "UserName"   => $this->_USERDATA_USERNAME,
-                "DomainName" => $DomainName
+                "DomainName" => $domainName
             ]
         ];
 

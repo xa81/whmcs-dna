@@ -60,9 +60,9 @@ trait DomainTrait {
 
     }
 
-    public function getDomainDetails($DomainName) {
+    public function getDomainDetails($domainName) {
 
-        $resp = $this->request('GET', 'domains/info', ['DomainName' => $DomainName]);
+        $resp = $this->request('GET', 'domains/info', ['DomainName' => $domainName]);
 
         return $resp;
 
@@ -76,7 +76,7 @@ trait DomainTrait {
 
     }
 
-    public function modifyNameServer($DomainName, $NameServers) {
+    public function modifyNameServer($domainName, $NameServers) {
 
         /*
         $pattern = "/^(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9\-]{0,61}[a-z0-9]$/i";
@@ -102,7 +102,7 @@ trait DomainTrait {
         */
 
         $resp = $this->request('PUT', "domains/dns/name-server", [
-            'domainName'  => $DomainName,
+            'domainName'  => $domainName,
             'nameServers' => $NameServers
         ]);
 
@@ -110,26 +110,26 @@ trait DomainTrait {
 
     }
 
-    public function enableTheftProtectionLock($DomainName) {
+    public function enableTheftProtectionLock($domainName) {
 
-        $resp = $this->request('POST', "domains/lock", ['DomainName' => $DomainName]);
+        $resp = $this->request('POST', "domains/lock", ['DomainName' => $domainName]);
 
         return $resp;
 
     }
 
-    public function disableTheftProtectionLock($DomainName) {
-        $resp = $this->request('POST', "domains/unlock", ['DomainName' => $DomainName]);
+    public function disableTheftProtectionLock($domainName) {
+        $resp = $this->request('POST', "domains/unlock", ['DomainName' => $domainName]);
 
         return $resp;
     }
 
-    public function addChildNameServer($DomainName, $NameServer, $IPAdresses) {
+    public function addChildNameServer($domainName, $NameServer, $IPAdresses) {
 
         $iptype = filter_var($IPAdresses, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) ? 'v4' : 'v6';
 
         $payload = [
-            'hostName'    => $NameServer . '.' . $DomainName,
+            'hostName'    => $NameServer . '.' . $domainName,
             'ipAddresses' => [$IPAdresses => $iptype],
         ];
 
@@ -139,10 +139,10 @@ trait DomainTrait {
 
     }
 
-    public function deleteChildNameServer($DomainName, $NameServer) {
+    public function deleteChildNameServer($domainName, $NameServer) {
 
         $payload = [
-            'hostName' => $NameServer . '.' . $DomainName,
+            'hostName' => $NameServer . '.' . $domainName,
         ];
 
         $resp = $this->request('DELETE', "domains/dns/host", $payload);
@@ -151,12 +151,12 @@ trait DomainTrait {
 
     }
 
-    public function modifyChildNameServer($DomainName, $NameServer, $NewIPAdresses) {
+    public function modifyChildNameServer($domainName, $NameServer, $NewIPAdresses) {
 
         $newiptype = filter_var($NewIPAdresses, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) ? 'v4' : 'v6';
 
         $payload = [
-            'hostName'          => $NameServer . '.' . $DomainName,
+            'hostName'          => $NameServer . '.' . $domainName,
             'addIpAddresses'    => [$NewIPAdresses => $newiptype],
         ];
 
@@ -166,10 +166,10 @@ trait DomainTrait {
 
     }
 
-    public function saveContacts($DomainName, $Contacts) {
+    public function saveContacts($domainName, $Contacts) {
 
         $payload = [
-            'domainName' => $DomainName,
+            'domainName' => $domainName,
             'contacts'   => [],
         ];
 
@@ -193,10 +193,10 @@ trait DomainTrait {
 
     }
 
-    public function transfer($DomainName, $AuthCode, $Period = 1, $Contacts=[]) {
+    public function transfer($domainName, $AuthCode, $Period = 1, $Contacts=[]) {
 
         $payload = [
-            'domainName' => $DomainName,
+            'domainName' => $domainName,
             'authCode'   => $AuthCode,
             'period'     => $Period,
             'contacts'   => [
@@ -213,21 +213,21 @@ trait DomainTrait {
 
     }
 
-    public function cancelTransfer($DomainName) {
+    public function cancelTransfer($domainName) {
 
     }
 
-    public function approveTransfer($DomainName) {
+    public function approveTransfer($domainName) {
 
     }
 
-    public function rejectTransfer($DomainName) {
+    public function rejectTransfer($domainName) {
 
     }
 
-    public function renew($DomainName, $Period) {
+    public function renew($domainName, $Period) {
         $payload = [
-            'domainName' => $DomainName,
+            'domainName' => $domainName,
             'period'     => $Period,
         ];
 
@@ -236,14 +236,11 @@ trait DomainTrait {
         return $resp;
     }
 
-    public function register(
-        $DomainName, $Period, $Contacts, $NameServers = [
-        "dns.domainnameapi.com",
-        "web.domainnameapi.com"
-    ]) {
+    public function register($domainName, $Period, $Contacts, $NameServers = ["dns.domainnameapi.com", "web.domainnameapi.com"],$thieftProtection = true
+    ,$privacyProtection = false,$addionalAttributes=[]) {
 
         $payload = [
-            'domainName'  => $DomainName,
+            'domainName'  => $domainName,
             'period'      => $Period,
             'nameServers' => $NameServers,
             'contacts'    => [
@@ -260,13 +257,20 @@ trait DomainTrait {
 
     }
 
-    public function modifyPrivacyProtectionStatus($DomainName, $Status, $Reason = "Owner request") {
+    public function modifyPrivacyProtectionStatus($domainName, $Status) {
+        $payload = [
+            'domainName'    => $domainName,
+            'privacyStatus' => $Status,
+        ];
 
+        $resp = $this->request('POST', "domains/privacy", $payload);
+
+        return $resp;
     }
 
-    public function getForward($DomainName) {
+    public function getForward($domainName) {
         $payload = [
-            'domainName' => $DomainName,
+            'domainName' => $domainName,
         ];
 
         $resp = $this->request('GET', "domains/forwards", $payload);
@@ -274,9 +278,9 @@ trait DomainTrait {
         return $resp;
     }
 
-    public function setForward($DomainName, $forwardto) {
+    public function setForward($domainName, $forwardto) {
         $payload = [
-            'domainName'      => $DomainName,
+            'domainName'      => $domainName,
             'redirectAddress' => $forwardto,
             'forwardType'     => 'Temporary',
         ];
@@ -286,9 +290,9 @@ trait DomainTrait {
         return $resp;
     }
 
-    public function getZoneRecords($DomainName) {
+    public function getZoneRecords($domainName) {
         $payload = [
-            'domainName' => $DomainName,
+            'domainName' => $domainName,
         ];
 
         $resp = $this->request('GET', "domains/zones", $payload);
@@ -296,7 +300,7 @@ trait DomainTrait {
         return $resp;
     }
 
-    public function addZoneRecord($DomainName, $Name, $Type, $Value, $TTL = 3600) {
+    public function addZoneRecord($domainName, $Name, $Type, $Value, $TTL = 3600) {
         $payload = [
             "zoneStruct" => [
                 "name"     => $Name,
@@ -306,12 +310,12 @@ trait DomainTrait {
             ]
         ];
 
-        $resp = $this->request('POST', "domains/zones?domainName={$DomainName}", $payload);
+        $resp = $this->request('POST', "domains/zones?domainName={$domainName}", $payload);
 
         return $resp;
     }
 
-    public function modifyZoneRecord($DomainName, $OldName, $Name, $Type, $Value, $TTL = 3600) {
+    public function modifyZoneRecord($domainName, $OldName, $Name, $Type, $Value, $TTL = 3600) {
         $payload = [
             "zoneStruct" => [
                 "name"     => $Name,
@@ -321,15 +325,15 @@ trait DomainTrait {
             ]
         ];
 
-        $resp = $this->request('PUT', "domains/zones?domainName={$DomainName}&recordName={$OldName}", $payload);
+        $resp = $this->request('PUT', "domains/zones?domainName={$domainName}&recordName={$OldName}", $payload);
 
         return $resp;
     }
 
-    public function deleteZoneRecord($DomainName, $Name, $Type, $Value) {
+    public function deleteZoneRecord($domainName, $Name, $Type, $Value) {
         $payload = [
-            "domainName" => $DomainName,
-            "Name"       => $Name.'.' . $DomainName,
+            "domainName" => $domainName,
+            "Name"       => $Name.'.' . $domainName,
             "RecordType" => $Type,
             "Record"     => $Value,
         ];
