@@ -289,6 +289,15 @@ trait DomainTrait {
 
         return $resp;
     }
+    public function deleteForward($domainName) {
+        $payload = [
+            'domainName'      => $domainName,
+        ];
+
+        $resp = $this->request('DELETE', "domains/forwards", $payload);
+
+        return $resp;
+    }
 
     public function getZoneRecords($domainName) {
         $payload = [
@@ -301,12 +310,18 @@ trait DomainTrait {
     }
 
     public function addZoneRecord($domainName, $Name, $Type, $Value, $TTL = 3600) {
+
+        $_contents = [$Value];
+        if(is_string($Value) && strpos($Value, '|') !== false) {
+            $_contents = explode('|', $Value);
+        }
+
         $payload = [
             "zoneStruct" => [
                 "name"     => $Name,
                 "ttl"      => $TTL,
                 "type"     => $Type,
-                "contents" => [$Value],
+                "contents" => $_contents,
             ]
         ];
 
@@ -316,16 +331,26 @@ trait DomainTrait {
     }
 
     public function modifyZoneRecord($domainName, $OldName, $Name, $Type, $Value, $TTL = 3600) {
+
+        $_contents = [$Value];
+        if(is_string($Value) && strpos($Value, '|') !== false) {
+            $_contents = explode('|', $Value);
+        }
         $payload = [
             "zoneStruct" => [
                 "name"     => $Name,
                 "ttl"      => $TTL,
                 "type"     => $Type,
-                "contents" => [$Value],
+                "contents" => $_contents,
             ]
         ];
 
-        $resp = $this->request('PUT', "domains/zones?domainName={$domainName}&recordName={$OldName}", $payload);
+        $url = "domains/zones?domainName={$domainName}";
+        if(strlen($OldName)>0){
+            $url .= "&recordName={$OldName}";
+        }
+
+        $resp = $this->request('PUT', $url, $payload);
 
         return $resp;
     }
@@ -333,10 +358,14 @@ trait DomainTrait {
     public function deleteZoneRecord($domainName, $Name, $Type, $Value) {
         $payload = [
             "domainName" => $domainName,
-            "Name"       => $Name.'.' . $domainName,
+            "Name"       => $Name,
             "RecordType" => $Type,
             "Record"     => $Value,
         ];
+
+        if(strpos($payload['Name'],$domainName ) === false ){
+            $payload['Name'] = $Name.'.' . $domainName;
+        }
 
         $resp = $this->request('DELETE', "domains/zones", $payload);
 
